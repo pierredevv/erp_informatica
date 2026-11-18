@@ -169,7 +169,13 @@ El repositorio incluye `vercel.json` con el rewrite `/api/:path*` hacia Render y
 - Variables: `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` (se hornean en el bundle).
 - El rewrite `/api/:path*` apunta a `https://<TU-SERVICIO>.onrender.com/api/:path*`.
 
-Si se cambia el dominio de Render o de Vercel, actualizar `vercel.json` y `APP_URL`/`CORS_ORIGINS` en Render.
+Si se cambia el dominio de Render o de Vercel, actualizar `apps/web/vercel.json` y `APP_URL`/`CORS_ORIGINS` en Render.
+
+### Despliegue actual
+
+- Web: https://erp-informatica.vercel.app
+- API: https://erp-informatica-api.onrender.com/api (health: `/api/health`)
+- Usuarios demo: `admin@localhost / admin123`, `encargado1@localhost / enc12345`, `encargado2@localhost / enc23456`.
 
 ## Seguridad y auditoría
 
