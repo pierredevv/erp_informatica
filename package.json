@@ -1,0 +1,37 @@
+{
+  "name": "erp-informatica",
+  "version": "1.0.0",
+  "private": true,
+  "packageManager": "pnpm@12.18.0",
+  "scripts": {
+    "pg:start": "node scripts/pg.mjs start",
+    "pg:stop": "node scripts/pg.mjs stop",
+    "pg:reset": "node scripts/pg.mjs reset",
+    "db:migrate": "pnpm exec prisma migrate dev --schema apps/api/prisma/schema.prisma",
+    "db:deploy": "pnpm exec prisma migrate deploy --schema apps/api/prisma/schema.prisma",
+    "db:generate": "pnpm exec prisma generate --schema apps/api/prisma/schema.prisma",
+    "db:seed": "node --env-file=.env apps/api/prisma/seed.mjs",
+    "db:setup": "pnpm pg:start && pnpm db:migrate -- --name init && pnpm db:seed",
+    "dev": "concurrently -n api,web -c cyan,magenta \"pnpm:dev:api\" \"pnpm:dev:web\"",
+    "start:prod": "node apps/api/dist/main.js",
+    "dev:api": "pnpm --filter @erp/api start:dev",
+    "dev:web": "pnpm --filter @erp/web dev",
+    "build:shared": "pnpm --filter @erp/shared build",
+    "build": "pnpm build:shared && pnpm --filter @erp/api build && pnpm --filter @erp/web build",
+    "test": "pnpm exec vitest run --config vitest.config.mts",
+    "typecheck": "pnpm exec tsc --noEmit -p apps/api/tsconfig.json && pnpm exec tsc --noEmit -p apps/web/tsconfig.json"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "embedded-postgres": "18.6.0-beta.19",
+    "prisma": "6.19.3",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3"
+  }
+}
