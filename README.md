@@ -177,9 +177,17 @@ Si se cambia el dominio de Render o de Vercel, actualizar `apps/web/vercel.json`
 - API: https://erp-informatica-api.onrender.com/api (health: `/api/health`)
 - Usuarios demo: `admin@localhost / admin123`, `encargado1@localhost / enc12345`, `encargado2@localhost / enc23456`.
 
+### Cambio de contraseña por enlace
+
+- Al crear un usuario con "Enviar correo de bienvenida" o al pulsar "Reset clave", se envía un enlace a `/cambiar-contraseña?token=...` para que la persona elija su contraseña. Nunca se envía la clave en texto plano.
+- El enlace vence en 24 horas y deja de ser válido en cuanto la contraseña cambia.
+- Desde el login, "¿Olvidaste tu contraseña?" permite solicitar un enlace a cualquier correo registrado.
+- `APP_URL` debe apuntar al dominio público de Vercel para que los enlaces funcionen.
+
 ## Seguridad y auditoría
 
 - La autenticación usa una cookie `httpOnly` y protección CSRF de doble envío.
+- El outbox de correos reclama cada fila con `FOR UPDATE SKIP LOCKED`, por lo que varias instancias (local y Render) nunca envían el mismo correo dos veces.
 - Todas las operaciones sensibles quedan en un log inmutable con cadena de hashes SHA-256.
 - No se realizan borrados físicos de registros auditables.
 - El estado de la cadena se puede verificar desde Reportes → Auditoría.
