@@ -26,7 +26,7 @@ export default function Login() {
       <div className="login-card">
         <div className="login-logo">CI</div>
         <h1>Control Centro Interno</h1>
-        <p>Ingresá con tu usuario de encargado o administrador.</p>
+        <p>Ingresa con tu usuario.</p>
         <form onSubmit={submit}>
           <label>
             Correo
@@ -34,7 +34,7 @@ export default function Login() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="encargado1@localhost"
+              placeholder="tu@correo.com"
               required
             />
           </label>
@@ -53,9 +53,6 @@ export default function Login() {
             {busy ? 'Ingresando…' : 'Ingresar'}
           </button>
         </form>
-        <div className="login-hint">
-          <strong>Demo:</strong> admin@localhost / admin123 · encargado1@localhost / enc12345 · encargado2@localhost / enc23456
-        </div>
       </div>
     </div>
   );
