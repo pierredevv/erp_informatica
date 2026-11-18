@@ -4,9 +4,19 @@ import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
 import type { User } from '@prisma/client';
 import type { AuthUser } from '../common/decorators';
+import {
+  isPasswordResetPayload,
+  passwordResetEmailBody,
+  passwordResetLink,
+  passwordResetVersion,
+  type PasswordResetPayload,
+} from '../common/password-reset';
 import { UsersService } from './users.service';
 import { ShiftService } from './shift.service';
 import { AuditService } from './audit.service';
+import { MailService } from './mail.service';
+
+const INVALID_LINK_MESSAGE = 'El enlace no es válido o venció. Solicitá uno nuevo.';
 
 @Injectable()
 export class AuthService {
@@ -15,6 +25,7 @@ export class AuthService {
     private readonly jwt: JwtService,
     private readonly shifts: ShiftService,
     private readonly audit: AuditService,
+    private readonly mail: MailService,
   ) {}
 
   async validate(email: string, password: string): Promise<User> {
@@ -69,5 +80,46 @@ export class AuthService {
   async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
     if (newPassword.length < 8) throw new BadRequestException('La contraseña nueva debe tener al menos 8 caracteres');
     await this.users.changePassword(userId, currentPassword, newPassword);
+  }
+
+  /** Siempre responde lo mismo para no revelar qué correos están registrados. */
+  async requestPasswordReset(email: string): Promise<{ ok: true }> {
+    const user = await this.users.findByEmail(email);
+    if (user && user.active && !user.deletedAt) {
+      const link = passwordResetLink(this.users.passwordResetToken(user));
+      await this.mail.enqueue(user.email, 'Restablece tu contraseña', passwordResetEmailBody(user.name, link));
+      await this.audit.log({
+        action: 'PASSWORD_RESET_REQUESTED',
+        entity: 'User',
+        entityId: user.id,
+      });
+    }
+    return { ok: true };
+  }
+
+  async resetPassword(token: string, newPassword: string): Promise<{ ok: true }> {
+    let payload: PasswordResetPayload;
+    try {
+      const decoded = this.jwt.verify<Record<string, unknown>>(token);
+      if (!isPasswordResetPayload(decoded)) throw new Error('Payload inválido');
+      payload = decoded;
+    } catch {
+      throw new UnauthorizedException(INVALID_LINK_MESSAGE);
+    }
+
+    let user: User;
+    try {
+      user = await this.users.findById(payload.sub);
+    } catch {
+      throw new UnauthorizedException(INVALID_LINK_MESSAGE);
+    }
+    if (!user.active || user.deletedAt) throw new UnauthorizedException(INVALID_LINK_MESSAGE);
+    if (passwordResetVersion(user.passwordHash) !== payload.ver) {
+      throw new UnauthorizedException('El enlace ya fue utilizado. Solicitá uno nuevo.');
+    }
+    if (newPassword.length < 8) throw new BadRequestException('La contraseña nueva debe tener al menos 8 caracteres');
+
+    await this.users.setPasswordFromLink(user.id, newPassword);
+    return { ok: true };
   }
 }

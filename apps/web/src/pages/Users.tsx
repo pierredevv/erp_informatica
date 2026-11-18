@@ -29,7 +29,7 @@ export default function Users() {
   const [users, setUsers] = useState<UserRow[]>([]);
   const [shifts, setShifts] = useState<Record<string, ShiftRow[]>>({});
   const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
-  const [temporary, setTemporary] = useState<{ email: string; password: string } | null>(null);
+  const [resetResult, setResetResult] = useState<{ email: string; message: string; password?: string } | null>(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({
     name: '',
@@ -98,11 +98,16 @@ export default function Users() {
   return (
     <div className="stack">
       {message && <div className={`alert ${message.error ? 'error' : 'success'}`}>{message.text}</div>}
-      {temporary && (
-        <div className="alert warn">
-          Contraseña temporal de <strong>{temporary.email}</strong>: <code>{temporary.password}</code>. Entréguela al usuario
-          y pídale cambiarla al ingresar.
-          <button className="link" onClick={() => setTemporary(null)}>
+      {resetResult && (
+        <div className="alert success">
+          <strong>{resetResult.email}:</strong> {resetResult.message}
+          {resetResult.password && (
+            <>
+              {' '}
+              Contraseña temporal: <code>{resetResult.password}</code>
+            </>
+          )}
+          <button className="link" onClick={() => setResetResult(null)}>
             Entendido
           </button>
         </div>
@@ -250,10 +255,15 @@ export default function Users() {
                             className="button small"
                             onClick={() =>
                               void run(async () => {
-                                const result = await api<{ temporaryPassword: string }>(`/users/${item.id}/reset-password`, {
-                                  method: 'POST',
+                                const result = await api<{ message: string; temporaryPassword?: string }>(
+                                  `/users/${item.id}/reset-password`,
+                                  { method: 'POST' },
+                                );
+                                setResetResult({
+                                  email: item.email,
+                                  message: result.message,
+                                  password: result.temporaryPassword,
                                 });
-                                setTemporary({ email: item.email, password: result.temporaryPassword });
                               })
                             }
                           >

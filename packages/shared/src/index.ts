@@ -32,6 +32,15 @@ export const changePasswordSchema = z.object({
   newPassword: z.string().min(8, 'Mínimo 8 caracteres'),
 });
 
+export const forgotPasswordSchema = z.object({
+  email,
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(20),
+  newPassword: z.string().min(8, 'Mínimo 8 caracteres'),
+});
+
 export const createUserSchema = z.object({
   name: z.string().trim().min(2),
   email,
@@ -159,6 +168,8 @@ export const dateRangeSchema = z.object({
 });
 
 export type LoginDto = z.infer<typeof loginSchema>;
+export type ForgotPasswordDto = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordDto = z.infer<typeof resetPasswordSchema>;
 export type CreateUserDto = z.infer<typeof createUserSchema>;
 export type UpdateUserDto = z.infer<typeof updateUserSchema>;
 export type ShiftDto = z.infer<typeof shiftSchema>;

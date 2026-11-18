@@ -12,6 +12,7 @@ import Shifts from './pages/Shifts';
 import Reports from './pages/Reports';
 import Notifications from './pages/Notifications';
 import Config from './pages/Config';
+import ResetPassword from './pages/ResetPassword';
 
 function PasswordModal() {
   const { changePassword, logout } = useAuth();
@@ -85,6 +86,11 @@ export default function App() {
   useEffect(() => {
     if (user) refreshUnread();
   }, [page, user, refreshUnread]);
+
+  // El enlace del correo es público: se procesa antes de exigir sesión.
+  if (window.location.pathname.replace(/\/+$/, '') === '/cambiar-contraseña') {
+    return <ResetPassword />;
+  }
 
   if (loading) return <div className="loading-screen">Cargando sistema…</div>;
   if (!user) return <Login />;

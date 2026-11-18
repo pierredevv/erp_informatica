@@ -2,7 +2,7 @@ import { Body, Controller, Get, HttpCode, Post, Res } from '@nestjs/common';
 import type { Response } from 'express';
 import { AllowOutOfShift, CurrentUser, Public, type AuthUser } from '../common/decorators';
 import { parse } from '../common/parse';
-import { changePasswordSchema, loginSchema } from '@erp/shared';
+import { changePasswordSchema, forgotPasswordSchema, loginSchema, resetPasswordSchema } from '@erp/shared';
 import { AuthService } from '../services/auth.service';
 import { config } from '../common/config';
 
@@ -54,5 +54,21 @@ export class AuthController {
     const data = parse(changePasswordSchema, body);
     await this.auth.changePassword(user.id, data.currentPassword, data.newPassword);
     return { ok: true };
+  }
+
+  @Public()
+  @Post('forgot-password')
+  @HttpCode(200)
+  async forgotPassword(@Body() body: unknown) {
+    const data = parse(forgotPasswordSchema, body);
+    return this.auth.requestPasswordReset(data.email);
+  }
+
+  @Public()
+  @Post('reset-password')
+  @HttpCode(200)
+  async resetPassword(@Body() body: unknown) {
+    const data = parse(resetPasswordSchema, body);
+    return this.auth.resetPassword(data.token, data.newPassword);
   }
 }

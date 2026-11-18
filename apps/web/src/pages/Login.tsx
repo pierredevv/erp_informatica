@@ -53,6 +53,11 @@ export default function Login() {
             {busy ? 'Ingresando…' : 'Ingresar'}
           </button>
         </form>
+        <p className="muted" style={{ marginTop: 18 }}>
+          <a className="link" href="/cambiar-contraseña">
+            ¿Olvidaste tu contraseña?
+          </a>
+        </p>
       </div>
     </div>
   );

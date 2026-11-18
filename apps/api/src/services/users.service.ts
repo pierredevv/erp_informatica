@@ -1,13 +1,28 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
 import type { Role, User } from '@prisma/client';
 import { PrismaService } from '../common/prisma.service';
 import type { AuthUser } from '../common/decorators';
+import { config } from '../common/config';
+import {
+  PASSWORD_RESET_TTL,
+  passwordResetLink,
+  passwordResetPayload,
+  welcomeEmailBody,
+  passwordResetEmailBody,
+} from '../common/password-reset';
 import { AuditService } from './audit.service';
 import { MailService } from './mail.service';
 
 export type SafeUser = Omit<User, 'passwordHash'>;
+
+export interface ResetPasswordResult {
+  message: string;
+  emailSent: boolean;
+  temporaryPassword?: string;
+}
 
 @Injectable()
 export class UsersService {
@@ -15,6 +30,7 @@ export class UsersService {
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
     private readonly mail: MailService,
+    private readonly jwt: JwtService,
   ) {}
 
   async list(includeInactive = false): Promise<SafeUser[]> {
@@ -45,6 +61,11 @@ export class UsersService {
     return this.prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
   }
 
+  /** Token de un solo uso: queda invalidado cuando cambia el passwordHash. */
+  passwordResetToken(user: Pick<User, 'id' | 'passwordHash'>): string {
+    return this.jwt.sign(passwordResetPayload(user), { expiresIn: PASSWORD_RESET_TTL });
+  }
+
   async create(
     data: { name: string; email: string; password?: string; role: Role; active: boolean; sendWelcomeEmail?: boolean },
     actor: AuthUser,
@@ -73,10 +94,11 @@ export class UsersService {
     });
 
     if (data.sendWelcomeEmail) {
+      const link = passwordResetLink(this.passwordResetToken(user));
       await this.mail.enqueue(
         user.email,
         'Tu usuario del sistema está listo',
-        `Hola ${user.name}. Tu usuario es ${user.email} y tu contraseña temporal es ${plain}. Deberás cambiarla al ingresar.`,
+        welcomeEmailBody(user.name, user.email, link),
       );
     }
     return this.toSafe(user);
@@ -131,29 +153,49 @@ export class UsersService {
     return this.toSafe(user);
   }
 
-  async resetPassword(id: string, actor: AuthUser): Promise<{ temporaryPassword: string }> {
+  async resetPassword(id: string, actor: AuthUser): Promise<ResetPasswordResult> {
     const user = await this.findById(id);
+    // Rotar el hash invalida los enlaces enviados anteriormente.
     const temporaryPassword = randomBytes(6).toString('base64url');
     const passwordHash = await bcrypt.hash(temporaryPassword, 10);
-    await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const result = await tx.user.update({
         where: { id },
         data: { passwordHash, mustChangePassword: true },
       });
       await this.audit.log({ action: 'USER_PASSWORD_RESET', entity: 'User', entityId: id, user: actor }, tx);
+      return result;
     });
+
+    const emailSent = Boolean(config.smtpHost);
+    const link = passwordResetLink(this.passwordResetToken(updated));
     await this.mail.enqueue(
-      user.email,
-      'Restablecimiento de contraseña',
-      `Tu contraseña temporal es ${temporaryPassword}. Deberás cambiarla al ingresar.`,
+      updated.email,
+      'Restablece tu contraseña',
+      passwordResetEmailBody(updated.name, link),
     );
-    return { temporaryPassword };
+    return {
+      message: emailSent
+        ? `Se envió un enlace a ${updated.email} para definir la contraseña.`
+        : `No hay correo configurado. Entregá esta contraseña temporal a ${updated.email}: ${temporaryPassword}`,
+      emailSent,
+      ...(emailSent ? {} : { temporaryPassword }),
+    };
+  }
+
+  /** Cambia la clave cuando el usuario proviene de un enlace de recuperación válido. */
+  async setPasswordFromLink(userId: string, newPassword: string): Promise<void> {
+    await this.saveNewPassword(userId, newPassword);
   }
 
   async changePassword(userId: string, currentPassword: string, newPassword: string): Promise<void> {
     const user = await this.findById(userId);
     const valid = await bcrypt.compare(currentPassword, user.passwordHash);
     if (!valid) throw new BadRequestException('La contraseña actual es incorrecta');
+    await this.saveNewPassword(userId, newPassword);
+  }
+
+  private async saveNewPassword(userId: string, newPassword: string): Promise<void> {
     const passwordHash = await bcrypt.hash(newPassword, 10);
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id: userId }, data: { passwordHash, mustChangePassword: false } });

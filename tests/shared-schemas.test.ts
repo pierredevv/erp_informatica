@@ -5,8 +5,10 @@ import {
   createItemSchema,
   createSaleSchema,
   createUserSchema,
+  forgotPasswordSchema,
   loginSchema,
   openCashSchema,
+  resetPasswordSchema,
   shiftSchema,
   weeklyScheduleSchema,
 } from '../packages/shared/src/index';
@@ -54,5 +56,18 @@ describe('esquemas compartidos', () => {
     expect(createItemSchema.safeParse({ type: 'SERVICIO', name: 'Fotocopia', salePrice: '0' }).success).toBe(false);
     expect(createItemSchema.safeParse({ type: 'SERVICIO', name: 'Fotocopia', salePrice: '2.00' }).success).toBe(true);
     expect(createUserSchema.safeParse({ name: 'Ana', email: 'ana@localhost', role: 'ENCARGADO' }).success).toBe(true);
+  });
+
+  it('valida las solicitudes de recuperación de contraseña', () => {
+    expect(forgotPasswordSchema.safeParse({ email: 'ana@localhost' }).success).toBe(true);
+    expect(forgotPasswordSchema.safeParse({ email: 'sin-arroba' }).success).toBe(false);
+    expect(resetPasswordSchema.safeParse({ token: 'abc', newPassword: 'nueva-clave-123' }).success).toBe(false);
+    expect(
+      resetPasswordSchema.safeParse({ token: 'eyJhbGciOiJIUzI1NiJ9.payload.signature', newPassword: 'corta' }).success,
+    ).toBe(false);
+    expect(
+      resetPasswordSchema.safeParse({ token: 'eyJhbGciOiJIUzI1NiJ9.payload.signature', newPassword: 'nueva-clave-123' })
+        .success,
+    ).toBe(true);
   });
 });
