@@ -13,6 +13,7 @@ import Reports from './pages/Reports';
 import Notifications from './pages/Notifications';
 import Config from './pages/Config';
 import ResetPassword from './pages/ResetPassword';
+import { isPasswordResetPath } from './reset-route';
 
 function PasswordModal() {
   const { changePassword, logout } = useAuth();
@@ -88,7 +89,7 @@ export default function App() {
   }, [page, user, refreshUnread]);
 
   // El enlace del correo es público: se procesa antes de exigir sesión.
-  if (window.location.pathname.replace(/\/+$/, '') === '/cambiar-contraseña') {
+  if (isPasswordResetPath(window.location.pathname)) {
     return <ResetPassword />;
   }
 
