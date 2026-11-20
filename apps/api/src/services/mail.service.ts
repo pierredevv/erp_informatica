@@ -15,7 +15,7 @@ interface ClaimedEmail {
 
 const MAX_ATTEMPTS = 3;
 const BATCH_SIZE = 20;
-// Debe ser mayor al timeout SMTP para que una instancia nunca recupere un envío aún en curso.
+// Debe ser mayor al timeout del proveedor para que una instancia nunca recupere un envío aún en curso.
 const CLAIM_TTL_SECONDS = 10 * 60;
 const RETRY_DELAY_MS = 5 * 60 * 1000;
 
@@ -23,6 +23,7 @@ const RETRY_DELAY_MS = 5 * 60 * 1000;
 export class MailService {
   private readonly logger = new Logger(MailService.name);
   private running = false;
+  private warnedNotConfigured = false;
 
   constructor(private readonly prisma: PrismaService) {}
 
@@ -33,7 +34,7 @@ export class MailService {
   }
 
   private transporter(): Transporter | null {
-    if (!config.smtpHost) return null;
+    if (config.mailProvider === 'brevo' || !config.smtpHost) return null;
     return nodemailer.createTransport({
       host: config.smtpHost,
       port: config.smtpPort,
@@ -45,10 +46,39 @@ export class MailService {
     });
   }
 
+  /** Brevo se llama por HTTPS (443): Render Free bloquea el puerto SMTP 587. */
+  private async sendViaBrevo(email: ClaimedEmail): Promise<void> {
+    const response = await fetch(config.brevoUrl, {
+      method: 'POST',
+      headers: {
+        'api-key': config.brevoApiKey,
+        'content-type': 'application/json',
+        accept: 'application/json',
+      },
+      body: JSON.stringify({
+        sender: { name: config.mailFromName, email: config.mailFromEmail },
+        to: [{ email: email.toAddress }],
+        subject: email.subject,
+        textContent: email.body,
+      }),
+    });
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(`Brevo HTTP ${response.status}: ${detail.slice(0, 300)}`);
+    }
+  }
+
   @Cron(CronExpression.EVERY_MINUTE)
   async processOutbox(): Promise<void> {
     // Evita dos ciclos concurrentes dentro de la misma instancia.
     if (this.running) return;
+    if (!config.mailConfigured) {
+      if (!this.warnedNotConfigured) {
+        this.logger.warn('No hay proveedor de correo configurado; los mensajes quedan pendientes en el outbox');
+        this.warnedNotConfigured = true;
+      }
+      return;
+    }
     this.running = true;
 
     try {
@@ -97,7 +127,9 @@ export class MailService {
 
   private async deliver(email: ClaimedEmail, transporter: Transporter | null): Promise<void> {
     try {
-      if (transporter) {
+      if (config.mailProvider === 'brevo') {
+        await this.sendViaBrevo(email);
+      } else if (transporter) {
         await transporter.sendMail({
           from: config.smtpFrom,
           to: email.toAddress,
@@ -105,7 +137,7 @@ export class MailService {
           text: email.body,
         });
       } else {
-        this.logger.log(`[EMAIL simulado → ${email.toAddress}] ${email.subject}\n${email.body}`);
+        throw new Error('No hay proveedor de correo configurado');
       }
 
       // updateMany con status PROCESSING evita que un ciclo viejo sobrescriba un reclamo nuevo.

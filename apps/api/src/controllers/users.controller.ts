@@ -41,6 +41,13 @@ export class UsersController {
 
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
+  @Post('resend-welcome')
+  async resendWelcome(@CurrentUser() user: AuthUser) {
+    return this.users.resendWelcomeToPending(user);
+  }
+
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   @Post(':id/deactivate')
   async deactivate(@Param('id') id: string, @CurrentUser() user: AuthUser) {
     return this.users.deactivate(id, user);

@@ -6,6 +6,20 @@ if (isProduction && jwtSecret === defaultJwtSecret) {
   throw new Error('JWT_SECRET debe configurarse explícitamente en producción');
 }
 
+function splitFrom(from: string): { email: string; name: string } {
+  const match = from.match(/^\s*(.*?)\s*<([^>]+)>\s*$/);
+  if (match) return { name: match[1].trim(), email: match[2].trim() };
+  return { name: 'ERP Centro', email: from.trim() };
+}
+
+const smtpFrom = process.env.SMTP_FROM || 'ERP Centro <no-reply@localhost>';
+const from = splitFrom(smtpFrom);
+const mailProvider = (process.env.MAIL_PROVIDER || (process.env.BREVO_API_KEY ? 'brevo' : 'smtp')).toLowerCase();
+const brevoApiKey = process.env.BREVO_API_KEY || '';
+const brevoUrl = process.env.BREVO_API_URL || 'https://api.brevo.com/v3/smtp/email';
+const mailFromEmail = process.env.MAIL_FROM_EMAIL || from.email;
+const mailFromName = process.env.MAIL_FROM_NAME || from.name;
+
 export const config = {
   jwtSecret,
   appUrl: process.env.APP_URL || 'http://localhost:5173',
@@ -25,6 +39,12 @@ export const config = {
   smtpPort: Number(process.env.SMTP_PORT || 587),
   smtpUser: process.env.SMTP_USER || '',
   smtpPass: process.env.SMTP_PASS || '',
-  smtpFrom: process.env.SMTP_FROM || 'ERP Centro <no-reply@localhost>',
+  smtpFrom,
+  mailProvider,
+  brevoApiKey,
+  brevoUrl,
+  mailFromEmail,
+  mailFromName,
+  mailConfigured: mailProvider === 'brevo' ? Boolean(brevoApiKey && mailFromEmail) : Boolean(process.env.SMTP_HOST),
   isProduction,
 };

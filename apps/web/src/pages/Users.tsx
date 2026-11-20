@@ -117,9 +117,29 @@ export default function Users() {
         <section className="card">
           <div className="card-head">
             <h2>{creating ? 'Nuevo usuario' : 'Usuarios del sistema'}</h2>
-            <button className="button primary small" onClick={() => setCreating(!creating)}>
-              {creating ? 'Cancelar' : '+ Nuevo usuario'}
-            </button>
+            <div className="row">
+              {users.some((item) => item.active && !item.deletedAt && item.mustChangePassword) && (
+                <button
+                  className="button small"
+                  onClick={() =>
+                    void run(async () => {
+                      const result = await api<{ sent: number; skipped: number; total: number }>('/users/resend-welcome', {
+                        method: 'POST',
+                      });
+                      setMessage({
+                        text: `Correos encolados: ${result.sent}. Ya pendientes (omitidos): ${result.skipped}.`,
+                      });
+                    })
+                  }
+                >
+                  Reenviar bienvenida a pendientes (
+                  {users.filter((item) => item.active && !item.deletedAt && item.mustChangePassword).length})
+                </button>
+              )}
+              <button className="button primary small" onClick={() => setCreating(!creating)}>
+                {creating ? 'Cancelar' : '+ Nuevo usuario'}
+              </button>
+            </div>
           </div>
           {creating && (
             <div className="form-grid five">

@@ -132,6 +132,11 @@ SMTP_PORT=587
 SMTP_USER="..."
 SMTP_PASS="..."
 SMTP_FROM="ERP Centro <no-reply@tu-dominio>"
+# Proveedor HTTPS (recomendado en Render Free; el puerto SMTP 587 está bloqueado):
+MAIL_PROVIDER="brevo"
+BREVO_API_KEY="..."
+MAIL_FROM_EMAIL="no-reply@tu-dominio"
+MAIL_FROM_NAME="ERP Centro"
 ```
 
 > Las variables `VITE_*` se **incorporan al bundle en el momento del build**. Definilas antes de ejecutar `pnpm build`. La API falla rápido si `NODE_ENV=production` y `JWT_SECRET` no fue configurado.
@@ -151,7 +156,9 @@ Sirve `apps/web/dist` con un servidor estático y configurá el proxy inverso:
 - `/api/*` → API (mismo origen, sin CORS adicional).
 - El resto → `apps/web/dist`, con fallback a `index.html` para rutas del SPA.
 
-Si SMTP está vacío, los correos quedan registrados en el outbox/visor interno en lugar de enviarse. No hace falta PostgreSQL local: la API usa Supabase vía `DATABASE_URL`.
+Con `MAIL_PROVIDER=brevo` los correos salen por la API HTTPS de Brevo (puerto 443). Si no hay proveedor configurado, quedan `PENDING` en el outbox/visor interno. No hace falta PostgreSQL local: la API usa Supabase vía `DATABASE_URL`.
+
+Al desactivar un usuario se archiva su correo (`archived+<id>+<correo>`) y se libera para crear otro. La fila original se conserva para no romper ventas, auditoría ni historial.
 
 ### Vercel (frontend) + Render (backend)
 
@@ -161,7 +168,7 @@ El repositorio incluye `vercel.json` con el rewrite `/api/:path*` hacia Render y
 - Build: `pnpm install --frozen-lockfile && pnpm build`
 - Start: `pnpm start:prod`
 - Health check: `/api/health`
-- Variables: `DATABASE_URL`, `JWT_SECRET`, `APP_URL` (URL pública de Vercel), `NODE_ENV=production`, `SMTP_*`, `ADMIN_EMAIL`, `TIMEZONE`, `CURRENCY`. `PORT` lo inyecta Render y la API lo respeta.
+- Variables: `DATABASE_URL`, `JWT_SECRET`, `APP_URL` (URL pública de Vercel), `NODE_ENV=production`, `MAIL_PROVIDER`, `BREVO_API_KEY`, `MAIL_FROM_EMAIL`, `MAIL_FROM_NAME`, `ADMIN_EMAIL`, `TIMEZONE`, `CURRENCY`. `PORT` lo inyecta Render y la API lo respeta. `SMTP_*` sigue sirviendo como alternativa local.
 
 **Vercel — proyecto Vite:**
 - Root Directory: `apps/web` (o raíz con output `apps/web/dist`).

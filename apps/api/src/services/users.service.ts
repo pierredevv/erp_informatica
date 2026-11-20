@@ -15,6 +15,7 @@ import {
 } from '../common/password-reset';
 import { AuditService } from './audit.service';
 import { MailService } from './mail.service';
+import { archivedEmail } from '../common/user-email';
 
 export type SafeUser = Omit<User, 'passwordHash'>;
 
@@ -58,7 +59,10 @@ export class UsersService {
   }
 
   async findByEmail(email: string): Promise<User | null> {
-    return this.prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+    // Los usuarios eliminados tienen el correo archivado; nunca deben bloquear uno nuevo.
+    return this.prisma.user.findFirst({
+      where: { email: email.trim().toLowerCase(), deletedAt: null },
+    });
   }
 
   /** Token de un solo uso: queda invalidado cuando cambia el passwordHash. */
@@ -106,22 +110,35 @@ export class UsersService {
 
   async update(id: string, data: Partial<{ name: string; email: string; role: Role; active: boolean }>, actor: AuthUser): Promise<SafeUser> {
     const previous = await this.findById(id);
-    if (data.email && data.email !== previous.email) {
-      const other = await this.findByEmail(data.email);
+    const normalizedEmail = data.email?.trim().toLowerCase();
+    if (normalizedEmail && normalizedEmail !== previous.email) {
+      const other = await this.findByEmail(normalizedEmail);
       if (other && other.id !== id) throw new BadRequestException('Ya existe un usuario con ese correo');
     }
     if (previous.role === 'ADMIN' && (data.role === 'ENCARGADO' || data.active === false)) {
       const admins = await this.prisma.user.count({ where: { role: 'ADMIN', active: true, deletedAt: null } });
       if (admins <= 1) throw new BadRequestException('No puede desactivar o degradar al único administrador');
     }
+    const deactivating = data.active === false;
     const user = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.user.update({
         where: { id },
-        data: { ...data, email: data.email?.trim().toLowerCase() },
+        data: {
+          ...data,
+          ...(normalizedEmail !== undefined
+            ? { email: deactivating ? archivedEmail(normalizedEmail, id) : normalizedEmail }
+            : deactivating
+              ? { email: archivedEmail(previous.email, id) }
+              : {}),
+          ...(deactivating ? { deletedAt: new Date() } : {}),
+        },
       });
+      if (deactivating) {
+        await tx.shiftTemplate.updateMany({ where: { userId: id }, data: { active: false } });
+      }
       await this.audit.log(
         {
-          action: 'USER_UPDATE',
+          action: deactivating ? 'USER_DEACTIVATE' : 'USER_UPDATE',
           entity: 'User',
           entityId: id,
           before: { name: previous.name, email: previous.email, role: previous.role, active: previous.active },
@@ -144,7 +161,7 @@ export class UsersService {
     const user = await this.prisma.$transaction(async (tx) => {
       const updated = await tx.user.update({
         where: { id },
-        data: { active: false, deletedAt: new Date() },
+        data: { active: false, deletedAt: new Date(), email: archivedEmail(previous.email, id) },
       });
       await tx.shiftTemplate.updateMany({ where: { userId: id }, data: { active: false } });
       await this.audit.log({ action: 'USER_DEACTIVATE', entity: 'User', entityId: id, user: actor }, tx);
@@ -167,7 +184,7 @@ export class UsersService {
       return result;
     });
 
-    const emailSent = Boolean(config.smtpHost);
+    const emailSent = config.mailConfigured;
     const link = passwordResetLink(this.passwordResetToken(updated));
     await this.mail.enqueue(
       updated.email,
@@ -181,6 +198,35 @@ export class UsersService {
       emailSent,
       ...(emailSent ? {} : { temporaryPassword }),
     };
+  }
+
+  /**
+   * Reenvía el correo de creación a los usuarios activos que todavía no definieron su clave.
+   * No duplica si ya hay un envío pendiente/en curso para el mismo correo.
+   */
+  async resendWelcomeToPending(actor: AuthUser): Promise<{ sent: number; skipped: number; total: number }> {
+    const users = await this.prisma.user.findMany({
+      where: { active: true, deletedAt: null, mustChangePassword: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    const subject = 'Tu usuario del sistema está listo';
+    let sent = 0;
+    let skipped = 0;
+
+    for (const user of users) {
+      const pending = await this.prisma.emailOutbox.count({
+        where: { toAddress: user.email, subject, status: { in: ['PENDING', 'PROCESSING'] } },
+      });
+      if (pending > 0) {
+        skipped += 1;
+        continue;
+      }
+      const link = passwordResetLink(this.passwordResetToken(user));
+      await this.mail.enqueue(user.email, subject, welcomeEmailBody(user.name, user.email, link));
+      await this.audit.log({ action: 'USER_WELCOME_RESEND', entity: 'User', entityId: user.id, user: actor });
+      sent += 1;
+    }
+    return { sent, skipped, total: users.length };
   }
 
   /** Cambia la clave cuando el usuario proviene de un enlace de recuperación válido. */
