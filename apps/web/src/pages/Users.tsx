@@ -127,12 +127,12 @@ export default function Users() {
                         method: 'POST',
                       });
                       setMessage({
-                        text: `Correos encolados: ${result.sent}. Ya pendientes (omitidos): ${result.skipped}.`,
+                        text: `Recordatorios encolados: ${result.sent}. Ya pendientes (omitidos): ${result.skipped}.`,
                       });
                     })
                   }
                 >
-                  Reenviar bienvenida a pendientes (
+                  Reenviar recordatorio a pendientes (
                   {users.filter((item) => item.active && !item.deletedAt && item.mustChangePassword).length})
                 </button>
               )}

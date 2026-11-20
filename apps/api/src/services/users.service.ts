@@ -8,9 +8,13 @@ import type { AuthUser } from '../common/decorators';
 import { config } from '../common/config';
 import {
   PASSWORD_RESET_TTL,
+  RESET_EMAIL_SUBJECT,
+  WELCOME_EMAIL_SUBJECT,
+  WELCOME_REMINDER_SUBJECT,
   passwordResetLink,
   passwordResetPayload,
   welcomeEmailBody,
+  welcomeReminderEmailBody,
   passwordResetEmailBody,
 } from '../common/password-reset';
 import { AuditService } from './audit.service';
@@ -101,7 +105,7 @@ export class UsersService {
       const link = passwordResetLink(this.passwordResetToken(user));
       await this.mail.enqueue(
         user.email,
-        'Tu usuario del sistema está listo',
+        WELCOME_EMAIL_SUBJECT,
         welcomeEmailBody(user.name, user.email, link),
       );
     }
@@ -188,7 +192,7 @@ export class UsersService {
     const link = passwordResetLink(this.passwordResetToken(updated));
     await this.mail.enqueue(
       updated.email,
-      'Restablece tu contraseña',
+      RESET_EMAIL_SUBJECT,
       passwordResetEmailBody(updated.name, link),
     );
     return {
@@ -201,7 +205,7 @@ export class UsersService {
   }
 
   /**
-   * Reenvía el correo de creación a los usuarios activos que todavía no definieron su clave.
+   * Reenvía un recordatorio a los usuarios activos que todavía no definieron su clave.
    * No duplica si ya hay un envío pendiente/en curso para el mismo correo.
    */
   async resendWelcomeToPending(actor: AuthUser): Promise<{ sent: number; skipped: number; total: number }> {
@@ -209,7 +213,7 @@ export class UsersService {
       where: { active: true, deletedAt: null, mustChangePassword: true },
       orderBy: { createdAt: 'asc' },
     });
-    const subject = 'Tu usuario del sistema está listo';
+    const subject = WELCOME_REMINDER_SUBJECT;
     let sent = 0;
     let skipped = 0;
 
@@ -222,7 +226,7 @@ export class UsersService {
         continue;
       }
       const link = passwordResetLink(this.passwordResetToken(user));
-      await this.mail.enqueue(user.email, subject, welcomeEmailBody(user.name, user.email, link));
+      await this.mail.enqueue(user.email, subject, welcomeReminderEmailBody(user.name, user.email, link));
       await this.audit.log({ action: 'USER_WELCOME_RESEND', entity: 'User', entityId: user.id, user: actor });
       sent += 1;
     }

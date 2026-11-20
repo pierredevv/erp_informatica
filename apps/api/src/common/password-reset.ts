@@ -5,6 +5,10 @@ import { config } from './config';
 export const PASSWORD_RESET_PURPOSE = 'password-reset';
 export const PASSWORD_RESET_TTL = '24h';
 
+export const WELCOME_EMAIL_SUBJECT = 'Tu usuario del sistema está listo';
+export const WELCOME_REMINDER_SUBJECT = 'Recordatorio: definí tu contraseña';
+export const RESET_EMAIL_SUBJECT = 'Restablece tu contraseña';
+
 export interface PasswordResetPayload {
   sub: string;
   purpose: typeof PASSWORD_RESET_PURPOSE;
@@ -36,9 +40,10 @@ export function isPasswordResetPayload(value: unknown): value is PasswordResetPa
   );
 }
 
+/** La ruta se codifica para que ningún cliente de correo trate la `ñ` como carácter especial. */
 export function passwordResetLink(token: string): string {
   const base = config.appUrl.replace(/\/+$/, '');
-  return `${base}/cambiar-contraseña?token=${encodeURIComponent(token)}`;
+  return `${base}/cambiar-contrase%C3%B1a?token=${encodeURIComponent(token)}`;
 }
 
 export function passwordResetEmailBody(name: string, link: string): string {
@@ -61,5 +66,18 @@ export function welcomeEmailBody(name: string, email: string, link: string): str
     `Para definir tu contraseña, ingresá al siguiente enlace: ${link}`,
     '',
     'El enlace vence en 24 horas. Si no fuiste vos, podés ignorar este correo.',
+  ].join('\n');
+}
+
+export function welcomeReminderEmailBody(name: string, email: string, link: string): string {
+  return [
+    `Hola ${name}.`,
+    '',
+    'Recordatorio: tu usuario del sistema todavía no tiene contraseña definida.',
+    `Tu usuario es ${email}.`,
+    `Para definir tu contraseña, ingresá al siguiente enlace: ${link}`,
+    '',
+    'El enlace vence en 24 horas. Una vez que definas la clave, este aviso deja de enviarse.',
+    'Si no fuiste vos, podés ignorar este correo.',
   ].join('\n');
 }

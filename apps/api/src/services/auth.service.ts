@@ -5,6 +5,7 @@ import { randomBytes } from 'node:crypto';
 import type { User } from '@prisma/client';
 import type { AuthUser } from '../common/decorators';
 import {
+  RESET_EMAIL_SUBJECT,
   isPasswordResetPayload,
   passwordResetEmailBody,
   passwordResetLink,
@@ -87,7 +88,7 @@ export class AuthService {
     const user = await this.users.findByEmail(email);
     if (user && user.active && !user.deletedAt) {
       const link = passwordResetLink(this.users.passwordResetToken(user));
-      await this.mail.enqueue(user.email, 'Restablece tu contraseña', passwordResetEmailBody(user.name, link));
+      await this.mail.enqueue(user.email, RESET_EMAIL_SUBJECT, passwordResetEmailBody(user.name, link));
       await this.audit.log({
         action: 'PASSWORD_RESET_REQUESTED',
         entity: 'User',

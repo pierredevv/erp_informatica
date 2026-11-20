@@ -4,6 +4,7 @@ import * as nodemailer from 'nodemailer';
 import type { Transporter } from 'nodemailer';
 import { PrismaService } from '../common/prisma.service';
 import { config } from '../common/config';
+import { emailHtmlFromText } from '../common/email-html';
 
 interface ClaimedEmail {
   id: string;
@@ -59,6 +60,7 @@ export class MailService {
         sender: { name: config.mailFromName, email: config.mailFromEmail },
         to: [{ email: email.toAddress }],
         subject: email.subject,
+        htmlContent: emailHtmlFromText(email.body),
         textContent: email.body,
       }),
     });
@@ -134,6 +136,7 @@ export class MailService {
           from: config.smtpFrom,
           to: email.toAddress,
           subject: email.subject,
+          html: emailHtmlFromText(email.body),
           text: email.body,
         });
       } else {
